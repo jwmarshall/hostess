@@ -318,7 +318,7 @@ module Hostess
     subcommand "del", "LOCATION\t\tDelete a location", DeleteLocationCommand
     subcommand "block", "LOCATION HOSTS ...\tBlock all hosts for a specific location", BlockHostCommand
     subcommand "unblock", "LOCATION HOSTS ...\tUnblock all hosts for a specific location", UnblockHostCommand
-    subcommand "redirect", "HOST IP\t\tRedirect host for a specific location", RedirectHostCommand
+    subcommand "redirect", "LOCATION HOST IP\t\tRedirect host for a specific location", RedirectHostCommand
     subcommand "blacklist", "HOST\t\t\tBlacklist a host from all locations", BlacklistHostCommand
     subcommand "whitelist", "HOST\t\t\tRemove host from blacklist", WhitelistHostCommand
     subcommand "reload", "\t\t\tReload the current location", ReloadCommand
