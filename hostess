@@ -14,15 +14,15 @@ module Hostess
 
   class << self
     def loadConfig
+      noconfig = false
       if File.exists?(CONFIGFILE)
         @config = YAML.load_file(CONFIGFILE)
       else
-        @config = self.newConfig
-        self.writeConfig
+        noconfig = true
       end
-      if ! @config
-        @config = self.newConfig
-        self.writeConfig
+      if ! @config || noconfig == true
+        puts "Config not found! please run the 'config' command."
+        exit 1
       end
     end
 
