@@ -1,0 +1,330 @@
+#!/usr/bin/env ruby
+
+require 'fileutils'
+require 'yaml'
+require 'rubygems'
+require 'clamp'
+
+module Hostess
+
+  LOCALHOST = '127.0.0.1'
+  HOSTSFILE = '/etc/hosts'
+  DIRNAME = File.expand_path(File.dirname(__FILE__))
+  CONFIGFILE = File.expand_path(ENV['HOME'] + "/.hostess.yml")
+
+  class << self
+    def loadConfig
+      if File.exists?(CONFIGFILE)
+        @config = YAML.load_file(CONFIGFILE)
+      else
+        @config = self.newConfig
+        self.writeConfig
+      end
+      if ! @config
+        @config = self.newConfig
+        self.writeConfig
+      end
+    end
+
+    def config
+      if @config.nil?
+        self.loadConfig
+      end
+      return @config
+    end
+
+    def config=(config)
+      @config = config
+    end
+
+    def newConfig
+      @config = {
+        'blacklist' => [],
+        'currently' => nil,
+        '@home' => [['127.0.0.1', 'localhost']],
+        '@work' => [['127.0.0.1', 'localhost']]
+      }
+    end
+
+    def writeConfig
+      if File.exists?(CONFIGFILE) && ! File.writable?(CONFIGFILE)
+        puts "Unable to write to config file (#{CONFIGFILE})!"
+        return false
+      else
+        File.open(CONFIGFILE, 'w') do |f|
+          YAML.dump(@config, f)
+        end
+        return true
+      end
+    end
+
+    def writeHosts(str)
+      if ! File.writable?(HOSTSFILE)
+        puts "Unable to write to hosts file, you may need to use sudo or chown/chmod your hosts file.."
+        return false
+      else
+        File.open(HOSTSFILE, 'w') do |f|
+          f.write(str)
+        end
+        return true
+      end
+    end
+
+    def isIpAddress?(str)
+      return (/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})?$/.match(str))
+    end
+
+    def isValidLocation?(location)
+      if ! /^@/.match(location)
+        return false
+      else
+        @config.each_key { |key|
+          if location == key
+            return true
+          end
+        }
+      end
+      return false
+    end
+
+    def generateHosts(location)
+      hosts = String.new
+
+      if /^@/.match(location) && ! self.isValidLocation?(location) 
+        puts "Invalid location (#{location})!"
+        puts ""
+      elsif @config[location].nil?
+        return ""
+      end
+
+      @config[location].each do |line|
+        if line.kind_of?(Array) 
+          if self.isIpAddress?(line[0])
+            ipaddress = line[0]
+            line = line.drop(1)
+
+            hosts << "#{ipaddress}\t"
+            line.each do |hostname|
+              hosts << "#{hostname}" 
+            end 
+            hosts << "\n"
+         # else
+         #   domain = line[0]
+         #   line = line.drop(1)
+         #   
+         #   hosts << "#{LOCALHOST}\t"
+         #   hosts << "#{domain} "
+         #   line.each { |subdomain|
+         #     hosts << "#{subdomain}.#{domain} "
+         #   }
+         #   hosts << "\n"
+          end
+        else
+          hosts << "#{LOCALHOST}\t#{line}\n"
+        end
+      end
+
+      return hosts
+    end
+  end
+
+  class AbstractCommand < Clamp::Command
+    option ["version", "--version"], :flag, "Show version information" do
+      puts "Hostess- Your Hosts File Manager (0.1.0)"
+      puts "Powered by Clamp-#{Clamp::VERSION}"
+      puts ""
+      exit(0)
+    end
+  end
+
+  class ChangeLocationCommand < AbstractCommand
+    extend Hostess
+    parameter "LOCATION", "Location"
+
+    def execute
+      Hostess.loadConfig
+      if ! Hostess.isValidLocation?(location)
+        puts "You specified an invalid location of '#{location}'"
+      else
+        puts "Changing location to #{location}"
+        hosts = String.new
+        hosts << Hostess.generateHosts(location)
+        hosts << Hostess.generateHosts('blacklist')
+        if Hostess.writeHosts(hosts)
+          Hostess.config['currently'] = location
+          Hostess.writeConfig
+        end
+      end
+    end
+  end
+
+  class CreateLocationCommand < AbstractCommand
+    extend Hostess
+    parameter "LOCATION", "Location"
+
+    def execute
+      Hostess.loadConfig
+      if ! /^@/.match(location)
+        puts "Locations must be prefixed with '@'"
+      elsif Hostess.isValidLocation?(location)
+        puts "Location already exists!"
+      else
+        Hostess.config[location] = [['127.0.0.1', 'localhost']]
+        Hostess.writeConfig 
+      end
+    end
+  end
+
+  class DeleteLocationCommand < AbstractCommand
+    extend Hostess
+    parameter "LOCATION", "Locaiton"
+
+    def execute
+      Hostess.loadConfig
+      if ! /^@/.match(location)
+        puts "Locations must be prefixed with '@'"
+      elsif ! Hostess.isValidLocation?(location)
+        puts "Location unknown!"
+      else
+        Hostess.config.delete(location)
+        Hostess.writeConfig
+      end
+    end
+  end
+
+  class ReloadCommand < AbstractCommand
+    extend Hostess
+    
+    def execute
+      Hostess.loadConfig
+      location = Hostess.config['currently']
+      if location.nil?
+        puts "Unable to verify your location, please set the current location!"
+      else
+        puts "Reloading location #{location}" 
+        hosts = String.new
+        hosts << Hostess.generateHosts(location)
+        hosts << Hostess.generateHosts('blacklist')
+        Hostess.writeHosts(hosts)
+      end
+    end
+  end
+
+  class BlockHostCommand < AbstractCommand
+    extend Hostess
+    parameter "LOCATION", "Location"
+    parameter "HOSTS ...", "Hosts ...", :attribute_name => :hosts
+
+    def execute
+      Hostess.loadConfig
+      if location == 'blacklist'
+        puts "Please use the blacklist command!"
+      elsif ! Hostess.isValidLocation?(location)
+        puts "You specified an invalid location of '#{location}'"
+      else
+        hosts.each do |host|
+          if Hostess.config[location].index(host) == nil
+            Hostess.config[location].push(host)
+          end
+        end 
+        Hostess.writeConfig
+      end
+    end
+  end
+
+  class UnblockHostCommand < AbstractCommand
+    extend Hostess
+    parameter "LOCATION", "Location"
+    parameter "HOSTS ...", "Hosts ...", :attribute_name => :hosts
+
+    def execute
+      Hostess.loadConfig
+      if location == 'blacklist'
+        puts "Please use the blacklist command!"
+      elsif ! Hostess.isValidLocation?(location)
+        puts "You specified an invalid location of '#{location}'"
+      else
+        hosts.each do |host|
+          i = Hostess.config[location].index(host) 
+          if ! i.nil?
+            Hostess.config[location][i] = nil 
+          end
+        end 
+        Hostess.config[location].compact!
+        Hostess.writeConfig
+      end
+    end
+  end
+
+  class BlacklistHostCommand < AbstractCommand
+    extend Hostess
+    parameter "HOSTS ...", "Hosts ...", :attribute_name => :hosts
+
+    def execute
+      Hostess.loadConfig
+      hosts.each do |host|
+        i = Hostess.config['blacklist'].push(host)
+      end
+      Hostess.writeConfig
+    end
+  end
+
+  class WhitelistHostCommand < AbstractCommand
+    extend Hostess
+    parameter "HOSTS ...", "Hosts ...", :attribute_name => :hosts
+
+    def execute
+      Hostess.loadConfig
+      hosts.each do |host|
+        i = Hostess.config['blacklist'].index(host)
+        if ! i.nil?
+          Hostess.config['blacklist'][i] = nil
+        end
+      end
+      Hostess.config['blacklist'].compact!
+      Hostess.writeConfig
+    end
+  end
+
+  class RedirectHostCommand < AbstractCommand
+    extend Hostess
+    parameter "LOCATION", "Location"
+    parameter "HOST", "Host"
+    parameter "IPADDRESS", "IP Address"
+
+    def execute
+      Hostess.loadConfig
+      if ! Hostess.isValidLocation?(location)
+        puts "You specified an invalid location of '#{location}'"
+      elsif ! Hostess.isIpAddress?(ipaddress)
+        puts "You specified an invalid ipaddress of '#{ipaddress}'"
+      else
+        Hostess.config[location].push([ipaddress, host])
+        Hostess.writeConfig
+      end
+    end
+  end
+
+  class ConfigCommand < AbstractCommand
+    def execute
+      Hostess.config = Hostess.newConfig
+      Hostess.writeConfig
+    end
+  end
+
+  class MainCommand < AbstractCommand
+    subcommand "set", "LOCATION\t\tChange to a new location", ChangeLocationCommand
+    subcommand "add", "LOCATION\t\tCreate new location", CreateLocationCommand
+    subcommand "del", "LOCATION\t\tDelete a location", DeleteLocationCommand
+    subcommand "block", "LOCATION HOSTS ...\tBlock all hosts for a specific location", BlockHostCommand
+    subcommand "unblock", "LOCATION HOSTS ...\tUnblock all hosts for a specific location", UnblockHostCommand
+    subcommand "redirect", "HOST IP\t\tRedirect host for a specific location", RedirectHostCommand
+    subcommand "blacklist", "HOST\t\t\tBlacklist a host from all locations", BlacklistHostCommand
+    subcommand "whitelist", "HOST\t\t\tRemove host from blacklist", WhitelistHostCommand
+    subcommand "reload", "\t\t\tReload the current location", ReloadCommand
+    subcommand "config", "\t\t\tGenerate basic config", ConfigCommand
+  end
+
+end
+
+Hostess::MainCommand.run
