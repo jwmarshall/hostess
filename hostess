@@ -4,6 +4,7 @@ require 'fileutils'
 require 'yaml'
 require 'rubygems'
 require 'clamp'
+require 'pp'
 
 module Hostess
 
@@ -192,6 +193,24 @@ module Hostess
     end
   end
 
+  class ListLocationDataCommand < AbstractCommand
+    extend Hostess
+    parameter "[LOCATION]", "Location"
+
+    def execute
+      Hostess.loadConfig
+      if location.nil?
+        Hostess.config.keys.each do |key|
+          if /^@/.match(key)
+            puts key
+          end
+        end
+      elsif Hostess.isValidLocation?(location) || location == 'blacklist'
+        pp Hostess.config[location]
+      end
+    end
+  end
+
   class ReloadCommand < AbstractCommand
     extend Hostess
     
@@ -316,9 +335,10 @@ module Hostess
     subcommand "set", "LOCATION\t\tChange to a new location", ChangeLocationCommand
     subcommand "add", "LOCATION\t\tCreate new location", CreateLocationCommand
     subcommand "del", "LOCATION\t\tDelete a location", DeleteLocationCommand
+    subcommand "list", "(LOCATION)\t\tList locations or all entries for a specific location", ListLocationDataCommand
     subcommand "block", "LOCATION HOSTS ...\tBlock all hosts for a specific location", BlockHostCommand
     subcommand "unblock", "LOCATION HOSTS ...\tUnblock all hosts for a specific location", UnblockHostCommand
-    subcommand "redirect", "LOCATION HOST IP\t\tRedirect host for a specific location", RedirectHostCommand
+    subcommand "redirect", "LOCATION HOST IP\tRedirect host for a specific location", RedirectHostCommand
     subcommand "blacklist", "HOST\t\t\tBlacklist a host from all locations", BlacklistHostCommand
     subcommand "whitelist", "HOST\t\t\tRemove host from blacklist", WhitelistHostCommand
     subcommand "reload", "\t\t\tReload the current location", ReloadCommand
