@@ -106,19 +106,13 @@ module Hostess
 
             hosts << "#{ipaddress}\t"
             line.each do |hostname|
-              hosts << "#{hostname}" 
+              if hostname.kind_of?(Array)
+                hosts << hostname.join(' ')
+              else
+                hosts << "#{hostname}" 
+              end
             end 
             hosts << "\n"
-         # else
-         #   domain = line[0]
-         #   line = line.drop(1)
-         #   
-         #   hosts << "#{LOCALHOST}\t"
-         #   hosts << "#{domain} "
-         #   line.each { |subdomain|
-         #     hosts << "#{subdomain}.#{domain} "
-         #   }
-         #   hosts << "\n"
           end
         else
           hosts << "#{LOCALHOST}\t#{line}\n"
@@ -305,11 +299,11 @@ module Hostess
     end
   end
 
-  class RedirectHostCommand < AbstractCommand
+  class RememberHostsCommand < AbstractCommand
     extend Hostess
     parameter "LOCATION", "Location"
-    parameter "HOST", "Host"
     parameter "IPADDRESS", "IP Address"
+    parameter "HOST ...", "Host ...", :attribute_name => :hosts
 
     def execute
       Hostess.loadConfig
@@ -318,11 +312,31 @@ module Hostess
       elsif ! Hostess.isIpAddress?(ipaddress)
         puts "You specified an invalid ipaddress of '#{ipaddress}'"
       else
-        Hostess.config[location].push([ipaddress, host])
+        Hostess.config[location].push([ipaddress, hosts])
         Hostess.writeConfig
       end
     end
   end
+
+  class ForgetHostsCommand < AbstractCommand
+    extend Hostess
+    parameter "LOCATION", "Location"
+    parameter "IPADDRESS", "IP Address"
+    parameter "HOST ...", "Host ...", :attribute_name => :hosts
+
+    def execute
+      Hostess.loadConfig
+      if ! Hostess.isValidLocation?(location)
+        puts "You specified an invalid location of '#{location}'"
+      elsif ! Hostess.isIpAddress?(ipaddress)
+        puts "You specified an invalid ipaddress of '#{ipaddress}'"
+      else
+        puts "Don't forget to write the forget function!"
+    #    Hostess.config[location].push([ipaddress, hosts])
+    #    Hostess.writeConfig
+      end
+    end
+  end 
 
   class ConfigCommand < AbstractCommand
     def execute
@@ -338,7 +352,8 @@ module Hostess
     subcommand "list", "(LOCATION)\t\tList locations or all entries for a specific location", ListLocationDataCommand
     subcommand "block", "LOCATION HOSTS ...\tBlock all hosts for a specific location", BlockHostCommand
     subcommand "unblock", "LOCATION HOSTS ...\tUnblock all hosts for a specific location", UnblockHostCommand
-    subcommand "redirect", "LOCATION HOST IP\tRedirect host for a specific location", RedirectHostCommand
+    subcommand "remember", "LOCATION IP HOSTS ...\tRemember hosts for a specific location", RememberHostsCommand
+    subcommand "forget", "LOCATION HOSTS ...\tForget hosts for a specific location", ForgetHostsCommand
     subcommand "blacklist", "HOST\t\t\tBlacklist a host from all locations", BlacklistHostCommand
     subcommand "whitelist", "HOST\t\t\tRemove host from blacklist", WhitelistHostCommand
     subcommand "reload", "\t\t\tReload the current location", ReloadCommand
