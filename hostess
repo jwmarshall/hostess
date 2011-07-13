@@ -352,12 +352,12 @@ module Hostess
     end
   end 
 
-  class ConfigCommand < AbstractCommand
-    def execute
-      Hostess.config = Hostess.newConfig
-      Hostess.writeConfig
-    end
-  end
+#  class ConfigCommand < AbstractCommand
+#    def execute
+#      Hostess.config = Hostess.newConfig
+#      Hostess.writeConfig
+#    end
+#  end
 
   class MainCommand < AbstractCommand
     subcommand "set", "LOCATION\t\tChange to a new location", ChangeLocationCommand
@@ -371,7 +371,7 @@ module Hostess
     subcommand "blacklist", "HOST\t\t\tBlacklist a host from all locations", BlacklistHostCommand
     subcommand "whitelist", "HOST\t\t\tRemove host from blacklist", WhitelistHostCommand
     subcommand "reload", "\t\t\tReload the current location", ReloadCommand
-    subcommand "config", "\t\t\tGenerate basic config", ConfigCommand
+#    subcommand "config", "\t\t\tGenerate basic config", ConfigCommand
   end
 
 end
